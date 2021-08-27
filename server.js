@@ -13,8 +13,10 @@ var storage = multer.diskStorage({
     callback(null, file.originalname);
   },
 });
+var faceMatcher;
 const upload = multer({ storage: storage });
 const path = require("path");
+const { dirxml } = require("console");
 const modelPathRoot = "./models";
 const minConfidence = 0.15;
 const maxResults = 5;
@@ -23,8 +25,12 @@ let optionsSSDMobileNet;
 app.post("/profile", upload.single("avatar"), async function (req, res) {
   const tensor = await image(req.file.destination + "/" + req.file.filename);
   const result = await detect(tensor);
+
+  console.log("=====>>>." + faceMatcher);
   for (const face of result) {
-    res.json(print(face));
+    let a = await faceMatcher.findBestMatch(face.descriptor);
+    console.log(a);
+    res.json([print(face), a]);
   }
   tensor.dispose();
 });
@@ -91,6 +97,27 @@ async function main() {
     maxResults,
   });
   console.log("Models is Ready");
+  const dir = fs.readdirSync("./dataset");
+  let datamodal = [];
+  for (a = 1; a < dir.length; a++) {
+    datamodal[a - 1] = [];
+    datamodal[a - 1].push(dir[a]);
+    // datamodal.push(dir[a]);
+    const inrDir = fs.readdirSync(path.join("./dataset", dir[a]));
+    let imageflate32 = [];
+    for (const img of inrDir) {
+      let imgpath = path.join("./dataset", dir[a], img);
+      const tensor = await image(imgpath);
+      const result = await detect(tensor);
+      imageflate32.push(result[0].descriptor);
+    }
+    datamodal[a - 1].push(imageflate32);
+  }
+
+  const labeledDescriptors = datamodal.map((e) => {
+    return new faceapi.LabeledFaceDescriptors(e[0], e[1]);
+  });
+  faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
 }
 
 async function detect(tensor) {
@@ -137,6 +164,22 @@ function print(face) {
     100 * expression[1]
   )}% ${expression[0]} Box: ${box.map((a) => Math.round(a))}`;
 }
+
+// async function reconization(){
+//   const labeledDescriptors = [
+//     new faceapi.LabeledFaceDescriptors(
+//       'obama',
+//       [descriptorObama1, descriptorObama2]
+//     ),
+//     new faceapi.LabeledFaceDescriptors(
+//       'trump',
+//       [descriptorTrump]
+//     )
+//   ]
+
+//   const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors)
+// }
+
 main();
 const port = 4000;
 
