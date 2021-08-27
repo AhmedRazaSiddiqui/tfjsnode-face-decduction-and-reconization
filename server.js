@@ -13,26 +13,27 @@ var storage = multer.diskStorage({
     callback(null, file.originalname);
   },
 });
-var faceMatcher;
+
 const upload = multer({ storage: storage });
 const path = require("path");
-const { dirxml } = require("console");
 const modelPathRoot = "./models";
 const minConfidence = 0.15;
 const maxResults = 5;
 let optionsSSDMobileNet;
+let faceMatcher;
 
 app.post("/profile", upload.single("avatar"), async function (req, res) {
-  const tensor = await image(req.file.destination + "/" + req.file.filename);
-  const result = await detect(tensor);
-
-  console.log("=====>>>." + faceMatcher);
-  for (const face of result) {
-    let a = await faceMatcher.findBestMatch(face.descriptor);
-    console.log(a);
-    res.json([print(face), a]);
+  try {
+    const tensor = await image(req.file.destination + "/" + req.file.filename);
+    const result = await detect(tensor);
+    for (const face of result) {
+      let a = await faceMatcher.findBestMatch(face.descriptor);
+      res.json([print(face), a]);
+    }
+    tensor.dispose();
+  } catch (error) {
+    res.json([error]);
   }
-  tensor.dispose();
 });
 
 async function image(input) {
@@ -80,12 +81,11 @@ async function image(input) {
 }
 
 async function main() {
-  console.log("Loading Models");
+  console.log("....................Loading And Trining Models................");
   await faceapi.tf.setBackend("tensorflow");
   await faceapi.tf.enableProdMode();
   await faceapi.tf.ENV.set("DEBUG", false);
   await faceapi.tf.ready();
-
   const modelPath = path.join(__dirname, modelPathRoot);
   await faceapi.nets.ssdMobilenetv1.loadFromDisk(modelPath);
   await faceapi.nets.ageGenderNet.loadFromDisk(modelPath);
@@ -96,7 +96,6 @@ async function main() {
     minConfidence,
     maxResults,
   });
-  console.log("Models is Ready");
   const dir = fs.readdirSync("./dataset");
   let datamodal = [];
   for (a = 1; a < dir.length; a++) {
@@ -118,6 +117,7 @@ async function main() {
     return new faceapi.LabeledFaceDescriptors(e[0], e[1]);
   });
   faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
+  console.log("....................Compeleted................");
 }
 
 async function detect(tensor) {
@@ -165,22 +165,6 @@ function print(face) {
   )}% ${expression[0]} Box: ${box.map((a) => Math.round(a))}`;
 }
 
-// async function reconization(){
-//   const labeledDescriptors = [
-//     new faceapi.LabeledFaceDescriptors(
-//       'obama',
-//       [descriptorObama1, descriptorObama2]
-//     ),
-//     new faceapi.LabeledFaceDescriptors(
-//       'trump',
-//       [descriptorTrump]
-//     )
-//   ]
-
-//   const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors)
-// }
-
 main();
 const port = 4000;
-
 app.listen(port, () => console.log(`Example app listening on port ${port}!`));
